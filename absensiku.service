@@ -1,0 +1,19 @@
+# /etc/systemd/system/absensiku.service
+[Unit]
+Description=Absensi PT. Triguna Megatama
+After=network.target
+
+[Service]
+ExecStart=/home/dietpi/ABSENSIKU/MyVenv/bin/python /home/dietpi/ABSENSIKU/mainapp.py
+WorkingDirectory=/home/dietpi/ABSENSIKU
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+User=dietpi
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/home/dietpi/ABSENSIKU/logs/service_stdout.log
+StandardError=append:/home/dietpi/ABSENSIKU/logs/service_stderr.log
+
+[Install]
+WantedBy=multi-user.target

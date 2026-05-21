@@ -1,0 +1,6 @@
+Flask
+pyzk
+apscheduler
+reportlab
+pyyaml
+gunicorn
