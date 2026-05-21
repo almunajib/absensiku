@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Dashboard Absensi</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script
+            src="{{ url_for('static', filename='script.js') }}"
+            defer
+        ></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background: linear-gradient(160deg, ivory 20%, #c4ffc4 100%);
+            }
+            h1 {
+                text-align: center;
+                margin-bottom: 10px;
+                font-size: 1.4em;
+            }
+            h3 {
+                margin-bottom: 5px;
+                font-size: 1em;
+            }
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                margin-bottom: 10px;
+            }
+            .stat-box {
+                background: white;
+                border-radius: 8px;
+                text-align: center;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            }
+            .charts {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+            }
+            .chart-box {
+                flex: 1 1 45%;
+                min-width: 300px;
+                background: white;
+                padding: 10px;
+                border-radius: 8px;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            }
+            .chart-box canvas {
+                max-width: 100%;
+                height: auto !important;
+                max-height: 400px;
+            }
+            .recent-activities {
+                background: white;
+                padding: 10px;
+                border-radius: 8px;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th,
+            td {
+                text-align: left;
+                padding: 8px;
+                border-bottom: 1px solid #ddd;
+            }
+            .badge {
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 0.8em;
+            }
+            .filter-box {
+                margin-bottom: 10px;
+                text-align: center;
+            }
+            .filter-box {
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 15px;
+                flex-wrap: wrap;
+            }
+
+            .filter-controls {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            select {
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+
+            input[type="date"] {
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+
+            button {
+                padding: 8px 15px;
+                background: #2196f3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            }
+
+            button:hover {
+                background: #1976d2;
+            }
+
+            .analytics {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                margin-top: 10px;
+            }
+            .analytics-box {
+                background: white;
+                border-radius: 8px;
+                text-align: center;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            }
+            /* Media queries untuk responsivitas */
+            @media (max-width: 1024px) {
+                .chart-box {
+                    flex: 1 1 100%; /* Full width pada tablet */
+                    min-width: auto;
+                }
+            }
+
+            @media (max-width: 768px) {
+                .charts {
+                    flex-direction: column;
+                }
+                .chart-box {
+                    flex: 1 1 100%;
+                    min-width: auto;
+                }
+                .stats {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .analytics {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .filter-box {
+                    justify-content: flex-start;
+                }
+                .filter-controls {
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .stats {
+                    grid-template-columns: 1fr;
+                }
+                .analytics {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <h1>📊 Dashboard Absensi X105</h1>
+
+        <!-- Filter tanggal -->
+        <div class="filter-box">
+            <div class="filter-controls">
+                <label>Periode:</label>
+                <select id="presetFilter">
+                    <option value="">Pilih Preset...</option>
+                    <option value="today">Hari Ini</option>
+                    <option value="yesterday">Kemarin</option>
+                    <option value="last7">7 Hari Terakhir</option>
+                    <option value="last30">30 Hari Terakhir</option>
+                    <option value="thisMonth">Bulan Ini</option>
+                    <option value="lastMonth">Bulan Lalu</option>
+                </select>
+
+                <label>Mulai:</label>
+                <input type="date" id="startDate" />
+
+                <label>Sampai:</label>
+                <input type="date" id="endDate" />
+
+                <button id="applyFilter">Terapkan</button>
+                <a href="/user-setup"><button>User Setup</button></a>
+            </div>
+        </div>
+
+        <!-- Statistik utama -->
+        <div class="stats">
+            <div class="stat-box">
+                <h3>Total Employees</h3>
+                <p id="totalEmployees">0</p>
+            </div>
+            <div class="stat-box">
+                <h3>Present Today</h3>
+                <p id="presentToday">0</p>
+            </div>
+            <div class="stat-box">
+                <h3>Absence Today</h3>
+                <p id="absentToday">0</p>
+            </div>
+            <div class="stat-box">
+                <h3>
+                    Present above<br />
+                    10:00 AM
+                </h3>
+                <p id="lateToday">0</p>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="charts">
+            <div class="chart-box">
+                <h3>Trends by Time</h3>
+                <canvas id="attendanceTrend"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3>Visits by Group</h3>
+                <canvas id="departmentBreakdown"></canvas>
+            </div>
+        </div>
+
+        <!-- Recent activities -->
+        <div class="recent-activities">
+            <h3>Recently Visited</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="recentActivities"></tbody>
+            </table>
+        </div>
+
+        <!-- Analytics -->
+        <div class="analytics">
+            <div class="analytics-box">
+                <h3>Rata-rata Kehadiran</h3>
+                <p id="avgAttendance">0%</p>
+            </div>
+            <div class="analytics-box">
+                <h3>Jam Tersibuk</h3>
+                <p id="peakTime">-</p>
+            </div>
+            <div class="analytics-box">
+                <h3>Hari Aktif</h3>
+                <p id="activeDays">0</p>
+            </div>
+            <div class="analytics-box">
+                <h3>Persentase Terlambat</h3>
+                <p id="lateRate">0%</p>
+            </div>
+        </div>
+    </body>
+</html>

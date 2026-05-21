@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Login — Absensi TGM & MKI</title>
+        <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: "Arial", Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, lightskyblue 0%, steelblue 80%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .login-card {
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                padding: 40px;
+                width: 100%;
+                max-width: 400px;
+            }
+            .login-logo {
+                display: flex;
+                justify-content: center;
+                gap: 16px;
+                margin-bottom: 16px;
+            }
+            .login-logo img { height: 96px; width: auto; }
+            .login-title {
+                text-align: center;
+                font-size: 18px;
+                font-weight: 700;
+                color: #2c3e50;
+                margin-bottom: 6px;
+            }
+            .login-subtitle {
+                text-align: center;
+                font-size: 13px;
+                color: #7f8c8d;
+                margin-bottom: 32px;
+            }
+            .form-group { margin-bottom: 18px; }
+            .form-group label {
+                display: block;
+                font-size: 13px;
+                font-weight: 600;
+                color: #2c3e50;
+                margin-bottom: 6px;
+            }
+            .form-group input {
+                width: 100%;
+                padding: 10px 14px;
+                border: 2px solid #ecf0f1;
+                border-radius: 8px;
+                font-size: 14px;
+                font-family: "Arial", Tahoma, Geneva, Verdana, sans-serif;
+                color: #2c3e50;
+                transition: border 0.2s;
+                outline: none;
+            }
+            .form-group input:focus { border-color: steelblue; }
+            .error-msg {
+                display: none;
+                background: #fdecea;
+                color: #c0392b;
+                border-radius: 8px;
+                padding: 10px 14px;
+                font-size: 13px;
+                margin-bottom: 16px;
+            }
+            .btn-login {
+                width: 100%;
+                padding: 12px;
+                background: linear-gradient(135deg, salmon 0%, crimson 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 15px;
+                font-weight: 600;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                cursor: pointer;
+                transition: opacity 0.2s, transform 0.2s;
+            }
+            .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+            .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        </style>
+    </head>
+    <body>
+        <div class="login-card">
+            <div class="login-logo">
+                <img src="{{ url_for('static', filename='tgm_small.png') }}" alt="TGM" />
+                <img src="{{ url_for('static', filename='mki_small.png') }}" alt="MKI" />
+            </div>
+            <div class="login-title">Absensi TGM & MKI</div>
+            <div class="login-subtitle">Headquarter Office</div>
+            <div class="error-msg" id="errorMsg"></div>
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Masukkan username" autocomplete="username" />
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Masukkan password" autocomplete="current-password" />
+            </div>
+            <button class="btn-login" id="loginBtn" onclick="doLogin()">Masuk</button>
+        </div>
+        <script>
+            document.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+
+            async function doLogin() {
+                const username = document.getElementById("username").value.trim();
+                const password = document.getElementById("password").value;
+                const errorMsg = document.getElementById("errorMsg");
+                const btn = document.getElementById("loginBtn");
+
+                if (!username || !password) {
+                    errorMsg.textContent = "Username dan password harus diisi.";
+                    errorMsg.style.display = "block";
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = "Memproses...";
+                errorMsg.style.display = "none";
+
+                try {
+                    const res = await fetch("/api/login", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.href = "/";
+                    } else {
+                        errorMsg.textContent = data.message || "Login gagal.";
+                        errorMsg.style.display = "block";
+                        btn.disabled = false;
+                        btn.textContent = "Masuk";
+                    }
+                } catch (err) {
+                    errorMsg.textContent = "Terjadi kesalahan, coba lagi.";
+                    errorMsg.style.display = "block";
+                    btn.disabled = false;
+                    btn.textContent = "Masuk";
+                }
+            }
+        </script>
+    </body>
+</html>

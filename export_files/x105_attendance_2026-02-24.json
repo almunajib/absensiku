@@ -1,0 +1,72 @@
+[
+  {
+    "userid": "15",
+    "checktime": "2026-02-24 01:12:21",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "5",
+    "checktime": "2026-02-24 05:23:59",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "15",
+    "checktime": "2026-02-24 05:31:03",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "15",
+    "checktime": "2026-02-24 07:56:04",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "13",
+    "checktime": "2026-02-24 09:56:57",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "3",
+    "checktime": "2026-02-24 10:07:57",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "9",
+    "checktime": "2026-02-24 10:24:50",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "14",
+    "checktime": "2026-02-24 10:27:37",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "7",
+    "checktime": "2026-02-24 11:11:13",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "15",
+    "checktime": "2026-02-24 11:13:02",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  }
+]

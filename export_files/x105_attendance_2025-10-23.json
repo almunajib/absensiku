@@ -1,0 +1,37 @@
+[
+  {
+    "userid": "5",
+    "checktime": "2025-10-23 04:59:40",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "13",
+    "checktime": "2025-10-23 09:04:50",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "8",
+    "checktime": "2025-10-23 10:52:38",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "7",
+    "checktime": "2025-10-23 11:04:35",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  },
+  {
+    "userid": "9",
+    "checktime": "2025-10-23 11:23:51",
+    "verifycode": 0,
+    "workcode": 0,
+    "sn": "A5NS193461028"
+  }
+]

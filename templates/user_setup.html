@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>User Setup</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
+    </head>
+    <body>
+        <div class="container">
+            <div class="form-container">
+                <h2>Add/Update User</h2>
+                <form id="user-form">
+                    <div class="form-row">
+                        <input type="hidden" id="uid" name="uid" />
+                        <div class="form-group">
+                            <label for="user_id">User ID</label>
+                            <input
+                                type="text"
+                                id="user_id"
+                                name="user_id"
+                                required
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="name">Name</label>
+                            <input type="text" id="name" name="name" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="privilege">Privilege</label>
+                            <select id="privilege" name="privilege">
+                                <option value="0">User</option>
+                                <option value="14">Administrator</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input
+                                type="password"
+                                id="password"
+                                name="password"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="group_id">Department Group</label>
+                            <select id="group_id" name="group_id"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="card">Card</label>
+                            <input type="text" id="card" name="card" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" id="add-user-btn">
+                            Add User
+                        </button>
+                        <button
+                            type="button"
+                            id="update-user-btn"
+                            style="display: none"
+                        >
+                            Update User
+                        </button>
+                        <button type="button" id="clear-form-btn">Clear</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="user-list-container">
+                <h2>User List</h2>
+                <table id="user-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Name</th>
+                            <th>Privilege</th>
+                            <th>Department Group</th>
+                            <th>Card</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- User data will be populated here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+                    <tbody>
+                        <!-- User data will be populated here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <script src="{{ url_for('static', filename='user_setup.js', v=1) }}"></script>
+    </body>
+</html>
