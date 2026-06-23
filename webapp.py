@@ -10,11 +10,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from core_files.x105_machine import X105Client
-from main_modules import x105_download_data # Import to get access to the wrapper
 
-# Dict untuk track status download per machine
-download_status = {}
 
 DB_PATH = "db_files/x105.db"
 
@@ -46,17 +42,40 @@ def query_db(query, args=(), one=False):
     return (rv[0] if rv else None) if one else rv
 
 
-def download_task_wrapper(machine_name, ip, port, password, sn):
+def download_task_wrapper(machine_name, ip, port, password, sn, machine_id=None):
     """
     Wrapper to call download data for a specific machine.
-    This is a local copy to avoid circular dependency issues if mainapp needs webapp.
+    Dilindungi SafeJobRunner agar koneksi yang hang tidak butuh restart systemd.
     """
     logger = logging.getLogger("scheduler")
     logger.info(f"🕒 Scheduler triggered for '{machine_name}' ({ip}:{port}) at {datetime.now()}")
-    try:
-        x105_download_data.main(ip=ip, port=port, password=password, sn=sn)
-    except Exception as e:
-        logger.error(f"Error running download_data for '{machine_name}': {e}")
+
+    key = f"machine_{machine_id if machine_id is not None else ip}"
+
+    if not is_machine_reachable(ip, port):
+        logger.error(f"Mesin '{machine_name}' tidak dapat dijangkau, skip job ini.")
+        return
+
+    ok, msg = SafeJobRunner.start(
+        key=key,
+        target=x105_download_data.main,
+        kwargs=dict(ip=ip, port=port, password=password, sn=sn),
+        timeout=90,
+    )
+    if not ok:
+        logger.warning(f"Skip job untuk '{machine_name}': {msg}")
+        return
+
+    # Tunggu hasil tanpa membiarkan scheduler hang selamanya
+    import time as _t
+    deadline = _t.time() + 100
+    while _t.time() < deadline:
+        result = SafeJobRunner.poll(key)
+        if result["status"] in ("done", "error"):
+            logger.info(f"Hasil job '{machine_name}': {result.get('message', result)}")
+            return
+        _t.sleep(3)
+    logger.warning(f"Job '{machine_name}' belum selesai setelah 100s polling, lanjut tanpa blocking.")
 
 
 def reschedule_jobs_for_machine(scheduler, machine_data):
@@ -88,7 +107,8 @@ def reschedule_jobs_for_machine(scheduler, machine_data):
         for i, time_str in enumerate(schedule_times):
             hour, minute = time_str.split(':')
             job_id = f"download_logs_{machine_id}_{i}"
-            task_func = partial(download_task_wrapper, machine_name=name, ip=ip, port=port, password=config.DEFAULT_PASSWORD, sn=sn)
+            task_func = partial(download_task_wrapper, machine_name=name, ip=ip, port=port,
+                     password=config.DEFAULT_PASSWORD, sn=sn, machine_id=machine_id)
 
             scheduler.add_job(
                 task_func,
@@ -465,11 +485,6 @@ def delete_machine(machine_id):
 
 @app.route("/api/machines/download-range/<int:machine_id>", methods=["POST"])
 def download_records_for_range(machine_id):
-    # Cek apakah sudah ada download yang berjalan
-    status = download_status.get(machine_id, {})
-    if status.get("status") == "running":
-        return jsonify({"message": "⚠️ Download sedang berjalan, tunggu sampai selesai."}), 429
-
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
@@ -480,17 +495,20 @@ def download_records_for_range(machine_id):
     if not machine:
         return jsonify({"message": "Machine not found"}), 404
 
-    # Reset status
-    download_status[machine_id] = {"status": "running", "message": "Sedang mengambil data..."}
+    key = f"machine_{machine_id}"
 
-    # Jalankan di background
-    thread = Thread(
-        target=run_download_background,
-        args=(machine_id, machine["ip_address"], machine["port"],
-              machine["sn"], start_date, end_date)
+    if not is_machine_reachable(machine["ip_address"], machine["port"]):
+        return jsonify({"message": f"❌ Mesin {machine['ip_address']} tidak dapat dijangkau."}), 503
+
+    ok, msg = SafeJobRunner.start(
+        key=key,
+        target=x105_download_data.main,
+        kwargs=dict(ip=machine["ip_address"], port=machine["port"], sn=machine["sn"],
+                    mode="range", start=start_date, end=end_date),
+        timeout=90,
     )
-    thread.daemon = True
-    thread.start()
+    if not ok:
+        return jsonify({"message": f"⚠️ {msg}"}), 429
 
     return jsonify({
         "message": "Download dimulai di background. Cek status dengan tombol Refresh.",
@@ -500,9 +518,16 @@ def download_records_for_range(machine_id):
 
 @app.route("/api/machines/download-status/<int:machine_id>", methods=["GET"])
 def get_download_status(machine_id):
-    """Endpoint untuk cek status download"""
-    status = download_status.get(machine_id, {"status": "idle", "message": "Tidak ada download aktif."})
-    return jsonify(status)
+    """Endpoint untuk cek status download (polling dari frontend)"""
+    result = SafeJobRunner.poll(f"machine_{machine_id}")
+
+    # Setelah selesai, update db_record_count di DB
+    if result.get("status") == "done":
+        machine = query_db("SELECT sn FROM machines WHERE id = ?", [machine_id], one=True)
+        if machine and machine["sn"]:
+            x105_download_data.update_db_record_count(machine["sn"])
+
+    return jsonify(result)
 
 def generate_daily_attendance_report(start_date, end_date, department):
     """Generate a daily attendance report for a specific date range and department."""
@@ -883,21 +908,26 @@ if __name__ == "__main__":
 @app.route("/api/machines/refresh-stats/<int:machine_id>", methods=["POST"])
 def refresh_machine_stats(machine_id):
     """Sync machine data to the database."""
-    lock = get_machine_lock(machine_id)
-    if not lock.acquire(blocking=False):
-        return jsonify({"status": "Busy", "message": "⚠️ Mesin sedang sibuk, tunggu beberapa saat lalu coba lagi."}), 429    
+    key = f"machine_{machine_id}"
+
+    # Cegah refresh stats bersamaan dengan download yang sedang berjalan
+    existing = SafeJobRunner.poll(key)
+    if existing.get("status") == "running":
+        return jsonify({"status": "Busy", "message": "⚠️ Mesin sedang sibuk download, coba lagi nanti."}), 429
+
     try:
-        machine = query_db(
-            "SELECT * FROM machines WHERE id = ?", [machine_id], one=True
-        )
+        machine = query_db("SELECT * FROM machines WHERE id = ?", [machine_id], one=True)
         if not machine:
             return jsonify({"message": "Machine not found"}), 404
+
+        if not is_machine_reachable(machine["ip_address"], machine["port"], timeout=5):
+            return jsonify({"status": "Offline", "message": "Mesin tidak dapat dijangkau"})
 
         client = X105Client(ip=machine["ip_address"], port=machine["port"], timeout=30)
         firmware, sn, user_count, fingers, cards, record_count, rec_cap, rec_av = client.get_all_info()
 
         if firmware and sn:
-            try: # Update the database with the new info
+            try:
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
                 cursor.execute(
@@ -907,21 +937,13 @@ def refresh_machine_stats(machine_id):
                 conn.commit()
                 conn.close()
 
-                # Re-fetch the data to get the updated values
-                updated_machine = query_db(
-                    "SELECT * FROM machines WHERE id = ?", [machine_id], one=True
-                )
+                updated_machine = query_db("SELECT * FROM machines WHERE id = ?", [machine_id], one=True)
                 return jsonify(dict(updated_machine))
             except Exception as e:
                 print(f"DATABASE ERROR: {e}")
                 return jsonify({"status": "Error", "message": "Database error"}), 500
         else:
-            # This means the connection to the device failed.
-            # Return a success response with an 'Offline' status.
             return jsonify({"status": "Offline", "message": "Failed to connect to device"})
 
     except Exception as e:
         return jsonify({"status": "Error", "message": str(e)}), 500
-    
-    finally:
-        lock.release()
