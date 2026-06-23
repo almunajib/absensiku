@@ -12,6 +12,10 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from core_files.x105_machine import X105Client
 from main_modules import x105_download_data # Import to get access to the wrapper
+
+# Dict untuk track status download per machine
+download_status = {}
+
 DB_PATH = "db_files/x105.db"
 
 app = Flask(__name__)
@@ -98,6 +102,28 @@ def reschedule_jobs_for_machine(scheduler, machine_data):
     except Exception as e:
         logger.error(f"✗ Failed to parse or reschedule for '{name}' ('{schedule_str}'): {e}.")
 
+def run_download_background(machine_id, ip, port, sn, start_date, end_date):
+    """Jalankan download di background thread"""
+    download_status[machine_id] = {"status": "running", "message": "Sedang mengambil data..."}
+    lock = get_machine_lock(machine_id)
+    lock.acquire()
+    try:
+        inserted = x105_download_data.main(
+            ip=ip, port=port, sn=sn,
+            mode="range", start=start_date, end=end_date
+        )
+        x105_download_data.update_db_record_count(sn)
+        download_status[machine_id] = {
+            "status": "done",
+            "message": f"✅ {inserted} records berhasil didownload."
+        }
+    except Exception as e:
+        download_status[machine_id] = {
+            "status": "error",
+            "message": f"❌ Error: {str(e)}"
+        }
+    finally:
+        lock.release()
 
 @app.route("/")
 @login_required
@@ -439,48 +465,44 @@ def delete_machine(machine_id):
 
 @app.route("/api/machines/download-range/<int:machine_id>", methods=["POST"])
 def download_records_for_range(machine_id):
-    """Download attendance records for a specific date range."""
+    # Cek apakah sudah ada download yang berjalan
+    status = download_status.get(machine_id, {})
+    if status.get("status") == "running":
+        return jsonify({"message": "⚠️ Download sedang berjalan, tunggu sampai selesai."}), 429
+
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
     if not start_date or not end_date:
         return jsonify({"message": "Start and end dates are required."}), 400
 
-    try:
-        machine = query_db(
-            "SELECT * FROM machines WHERE id = ?", [machine_id], one=True
-        )
-        if not machine:
-            return jsonify({"message": "Machine not found"}), 404
+    machine = query_db("SELECT * FROM machines WHERE id = ?", [machine_id], one=True)
+    if not machine:
+        return jsonify({"message": "Machine not found"}), 404
 
-        # Extract machine details
-        ip = machine["ip_address"]
-        port = machine["port"]
-        sn = machine["sn"]
+    # Reset status
+    download_status[machine_id] = {"status": "running", "message": "Sedang mengambil data..."}
 
-        # Call the download function with the range parameters
-        from core_files import config
-        inserted = x105_download_data.main(
-            ip=ip,
-            port=port,
-            sn=sn,
-            mode="range",
-            start=start_date,
-            end=end_date,
-        )
+    # Jalankan di background
+    thread = Thread(
+        target=run_download_background,
+        args=(machine_id, machine["ip_address"], machine["port"],
+              machine["sn"], start_date, end_date)
+    )
+    thread.daemon = True
+    thread.start()
 
-        # After saving, update the record count in the database
-        x105_download_data.update_db_record_count(sn)
+    return jsonify({
+        "message": "Download dimulai di background. Cek status dengan tombol Refresh.",
+        "status": "started"
+    }), 202
 
-        return jsonify({
-            "message": f"{inserted} records downloaded and saved to the database."
-        }), 200
 
-    except Exception as e:
-        return jsonify({
-            "message": f"Error downloading records: {str(e)}"
-        }), 500
-
+@app.route("/api/machines/download-status/<int:machine_id>", methods=["GET"])
+def get_download_status(machine_id):
+    """Endpoint untuk cek status download"""
+    status = download_status.get(machine_id, {"status": "idle", "message": "Tidak ada download aktif."})
+    return jsonify(status)
 
 def generate_daily_attendance_report(start_date, end_date, department):
     """Generate a daily attendance report for a specific date range and department."""
@@ -717,7 +739,7 @@ def delete_user(user_id):
 def get_machine_status(ip):
     """Test the connection to a machine and return its status."""
     # Using a shorter timeout for quick status checks
-    client = X105Client(ip=ip, timeout=5)
+    client = X105Client(ip=ip, timeout=15)
     is_online, message = client.test_connection()
 
     if is_online:
@@ -861,6 +883,9 @@ if __name__ == "__main__":
 @app.route("/api/machines/refresh-stats/<int:machine_id>", methods=["POST"])
 def refresh_machine_stats(machine_id):
     """Sync machine data to the database."""
+    lock = get_machine_lock(machine_id)
+    if not lock.acquire(blocking=False):
+        return jsonify({"status": "Busy", "message": "⚠️ Mesin sedang sibuk, tunggu beberapa saat lalu coba lagi."}), 429    
     try:
         machine = query_db(
             "SELECT * FROM machines WHERE id = ?", [machine_id], one=True
@@ -876,6 +901,7 @@ def refresh_machine_stats(machine_id):
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
                 cursor.execute(
+                    "UPDATE machines SET firmware=?, sn=?, user_count=?, fingers=?, cards=?, record_count=?, rec_cap=?, rec_av=? WHERE id=?",
                     (firmware, sn, user_count, fingers, cards, record_count, rec_cap, rec_av, machine_id),
                 )
                 conn.commit()
@@ -896,3 +922,6 @@ def refresh_machine_stats(machine_id):
 
     except Exception as e:
         return jsonify({"status": "Error", "message": str(e)}), 500
+    
+    finally:
+        lock.release()
