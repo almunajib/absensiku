@@ -10,7 +10,10 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from core_files.x105_machine import X105Client
+from core_files.safe_runner import SafeJobRunner, is_machine_reachable
+from main_modules import x105_download_data
 
 DB_PATH = "db_files/x105.db"
 
@@ -122,28 +125,6 @@ def reschedule_jobs_for_machine(scheduler, machine_data):
     except Exception as e:
         logger.error(f"✗ Failed to parse or reschedule for '{name}' ('{schedule_str}'): {e}.")
 
-def run_download_background(machine_id, ip, port, sn, start_date, end_date):
-    """Jalankan download di background thread"""
-    download_status[machine_id] = {"status": "running", "message": "Sedang mengambil data..."}
-    lock = get_machine_lock(machine_id)
-    lock.acquire()
-    try:
-        inserted = x105_download_data.main(
-            ip=ip, port=port, sn=sn,
-            mode="range", start=start_date, end=end_date
-        )
-        x105_download_data.update_db_record_count(sn)
-        download_status[machine_id] = {
-            "status": "done",
-            "message": f"✅ {inserted} records berhasil didownload."
-        }
-    except Exception as e:
-        download_status[machine_id] = {
-            "status": "error",
-            "message": f"❌ Error: {str(e)}"
-        }
-    finally:
-        lock.release()
 
 @app.route("/")
 @login_required
